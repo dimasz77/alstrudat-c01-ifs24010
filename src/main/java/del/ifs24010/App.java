@@ -2,18 +2,16 @@ package del.ifs24010;
 
 import java.io.InputStream;
 import java.io.IOException;
-import java.io.PrintWriter;
 
 public class App {
     public static void main(String[] args) throws IOException {
         FastScanner sc = new FastScanner(System.in);
-        PrintWriter out = new PrintWriter(System.out);
+        StringBuilder out = new StringBuilder();
 
-        // Loop ini akan membaca SEMUA soal sampai file benar-benar habis
         while (true) {
             int n = sc.nextInt();
             if (n == -1) {
-                break; // File selesai
+                break; // Berhenti dengan aman saat file habis
             }
             
             int q = sc.nextInt();
@@ -40,13 +38,13 @@ public class App {
                     long v = sc.nextLong();
                     program.updateFragmentValue(x, v);
                 } else {
-                    out.println(program.calculateMaxHarmony());
+                    out.append(program.calculateMaxHarmony()).append("\n");
                 }
             }
         }
         
-        out.flush();
-        out.close();
+        // Cetak sekaligus di akhir
+        System.out.print(out.toString());
     }
 
     static class FastScanner {
