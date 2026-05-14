@@ -1,8 +1,7 @@
 package del.ifs24010;
 
 import java.util.Arrays;
-import java.util.TreeMap;
-import java.util.Map;
+import java.util.PriorityQueue;
 
 public class Program {
     private static final long NEG_INF = -10000000000000000L;
@@ -33,47 +32,45 @@ public class Program {
     private long qGa;
     private long qGc;
 
-    // MultiSet Anti-Memory Leak menggunakan TreeMap
+    // Struktur data antri-lelet dengan angka negatif
     private static class MultiSet {
-        TreeMap<Long, Integer> map = new TreeMap<>();
+        PriorityQueue<Long> maxHeap = new PriorityQueue<>();
+        PriorityQueue<Long> removeHeap = new PriorityQueue<>();
 
         void add(long val) {
-            map.put(val, map.getOrDefault(val, 0) + 1);
+            maxHeap.add(-val);
         }
 
         void remove(long val) {
-            Integer count = map.get(val);
-            if (count != null) {
-                if (count <= 1) {
-                    map.remove(val);
-                } else {
-                    map.put(val, count - 1);
-                }
+            removeHeap.add(-val);
+        }
+
+        void clean() {
+            while (!maxHeap.isEmpty() && !removeHeap.isEmpty() && maxHeap.peek().equals(removeHeap.peek())) {
+                maxHeap.poll();
+                removeHeap.poll();
             }
         }
 
         long max() {
-            return map.isEmpty() ? NEG_INF : map.lastKey();
+            clean();
+            return maxHeap.isEmpty() ? NEG_INF : -maxHeap.peek();
         }
 
         long[] top2WithZero() {
+            clean();
             long[] res = {0, 0};
-            if (map.isEmpty()) return res;
+            if (maxHeap.isEmpty()) return res;
             
-            Map.Entry<Long, Integer> lastEntry = map.lastEntry();
-            long v1 = lastEntry.getKey();
+            long v1 = -maxHeap.poll();
             if (v1 > 0) res[0] = v1;
-            else return res;
             
-            if (lastEntry.getValue() >= 2) {
-                res[1] = v1;
-            } else {
-                Map.Entry<Long, Integer> lowerEntry = map.lowerEntry(v1);
-                if (lowerEntry != null) {
-                    long v2 = lowerEntry.getKey();
-                    if (v2 > 0) res[1] = v2;
-                }
+            clean();
+            if (!maxHeap.isEmpty()) {
+                long v2 = -maxHeap.peek();
+                if (v2 > 0) res[1] = v2;
             }
+            maxHeap.add(-v1); // Kembalikan ke heap
             return res;
         }
     }
@@ -268,29 +265,25 @@ public class Program {
             int h = head[u];
             int t = tail[h];
             int p = parent[h];
-            long oldF = 0;
-            long oldG = 0;
+            long oldF = 0, oldG = 0;
             if (p > 0) {
                 qFa = NEG_INF; qFb = 0; qGa = NEG_INF; qGc = NEG_INF;
                 query(1, 1, n, pos[h], pos[t]);
-                oldF = qFa;
-                oldG = qGa;
+                oldF = qFa; oldG = qGa;
             }
+            
             updateBaseNode(u);
+            
             if (p > 0) {
                 qFa = NEG_INF; qFb = 0; qGa = NEG_INF; qGc = NEG_INF;
                 query(1, 1, n, pos[h], pos[t]);
-                long newF = qFa;
-                long newG = qGa;
+                long newF = qFa, newG = qGa;
                 
-                // OPTIMASI DEWA: Hanya proses jika nilai benar-benar berubah
                 if (oldF != newF) {
-                    lightF[p].remove(oldF);
-                    lightF[p].add(newF);
+                    lightF[p].remove(oldF); lightF[p].add(newF);
                 }
                 if (oldG != newG) {
-                    lightG[p].remove(oldG);
-                    lightG[p].add(newG);
+                    lightG[p].remove(oldG); lightG[p].add(newG);
                 }
             }
             u = p;

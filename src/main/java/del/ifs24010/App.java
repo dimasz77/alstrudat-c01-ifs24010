@@ -2,59 +2,56 @@ package del.ifs24010;
 
 import java.io.InputStream;
 import java.io.IOException;
+import java.io.PrintWriter;
 
 public class App {
     public static void main(String[] args) throws IOException {
         FastScanner sc = new FastScanner(System.in);
-        StringBuilder out = new StringBuilder();
+        PrintWriter out = new PrintWriter(System.out);
 
-        // Membaca N (jika file kosong, n = -1)
-        int n = sc.nextInt();
-        if (n == -1) {
-            return;
-        }
-        
-        int q = sc.nextInt();
-
-        // Membaca Nilai Keaslian Awal
-        long[] weights = new long[n + 1];
-        for (int i = 1; i <= n; i++) {
-            weights[i] = sc.nextLong();
-        }
-
-        // Membaca Sumber Fragmen (Parent)
-        int[] parents = new int[n + 1];
-        if (n > 1) {
-            for (int i = 2; i <= n; i++) {
-                parents[i] = sc.nextInt();
+        // Loop ini akan membaca SEMUA soal sampai file benar-benar habis
+        while (true) {
+            int n = sc.nextInt();
+            if (n == -1) {
+                break; // File selesai
             }
-        }
+            
+            int q = sc.nextInt();
 
-        // Inisialisasi Program
-        Program program = new Program();
-        program.initializeLibrary(n, weights, parents);
+            long[] weights = new long[n + 1];
+            for (int i = 1; i <= n; i++) {
+                weights[i] = sc.nextLong();
+            }
 
-        // Memproses Kueri
-        for (int i = 0; i < q; i++) {
-            int type = sc.nextInt();
-            if (type == 1) {
-                int x = sc.nextInt();
-                long v = sc.nextLong();
-                program.updateFragmentValue(x, v);
-            } else {
-                // Simpan hasil ke memori sementara (super cepat)
-                out.append(program.calculateMaxHarmony()).append("\n");
+            int[] parents = new int[n + 1];
+            if (n > 1) {
+                for (int i = 2; i <= n; i++) {
+                    parents[i] = sc.nextInt();
+                }
+            }
+
+            Program program = new Program();
+            program.initializeLibrary(n, weights, parents);
+
+            for (int i = 0; i < q; i++) {
+                int type = sc.nextInt();
+                if (type == 1) {
+                    int x = sc.nextInt();
+                    long v = sc.nextLong();
+                    program.updateFragmentValue(x, v);
+                } else {
+                    out.println(program.calculateMaxHarmony());
+                }
             }
         }
         
-        // Cetak semua hasil sekaligus ke terminal tanpa cacat format
-        System.out.print(out);
+        out.flush();
+        out.close();
     }
 
-    // Custom Scanner Super Cepat (Anti Time-Limit)
     static class FastScanner {
         private InputStream stream;
-        private byte[] buf = new byte[1024 * 1024]; // Buffer 1MB
+        private byte[] buf = new byte[1024 * 1024];
         private int head, tail;
 
         public FastScanner(InputStream stream) {
