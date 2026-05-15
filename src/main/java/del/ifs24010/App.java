@@ -1,110 +1,55 @@
 package del.ifs24010;
 
-import java.io.InputStream;
-import java.io.IOException;
+import java.io.*;
+import java.util.StringTokenizer;
 
 public class App {
     public static void main(String[] args) throws IOException {
-        FastScanner sc = new FastScanner(System.in);
-        StringBuilder out = new StringBuilder();
+        FastReader sc = new FastReader(System.in);
+        PrintWriter out = new PrintWriter(System.out);
 
-        while (true) {
-            int n = sc.nextInt();
-            if (n == -1) {
-                break; // Berhenti dengan aman saat file habis
-            }
-            
-            int q = sc.nextInt();
+        String firstLine = sc.next();
+        if (firstLine == null) return;
+        int n = Integer.parseInt(firstLine);
+        int q = sc.nextInt();
 
-            long[] weights = new long[n + 1];
-            for (int i = 1; i <= n; i++) {
-                weights[i] = sc.nextLong();
-            }
+        long[] weights = new long[n + 1];
+        for (int i = 1; i <= n; i++) weights[i] = sc.nextLong();
 
-            int[] parents = new int[n + 1];
-            if (n > 1) {
-                for (int i = 2; i <= n; i++) {
-                    parents[i] = sc.nextInt();
-                }
-            }
+        int[] parents = new int[n + 1];
+        for (int i = 2; i <= n; i++) parents[i] = sc.nextInt();
 
-            Program program = new Program();
-            program.initializeLibrary(n, weights, parents);
+        Program program = new Program();
+        program.initializeLibrary(n, weights, parents);
 
-            for (int i = 0; i < q; i++) {
-                int type = sc.nextInt();
-                if (type == 1) {
-                    int x = sc.nextInt();
-                    long v = sc.nextLong();
-                    program.updateFragmentValue(x, v);
-                } else {
-                    out.append(program.calculateMaxHarmony()).append("\n");
-                }
+        for (int i = 0; i < q; i++) {
+            int type = sc.nextInt();
+            if (type == 1) {
+                int x = sc.nextInt();
+                long v = sc.nextLong();
+                program.updateFragmentValue(x, v);
+            } else {
+                out.println(program.calculateMaxHarmony());
             }
         }
-        
-        // Cetak sekaligus di akhir
-        System.out.print(out.toString());
+        out.flush();
+        out.close();
     }
 
-    static class FastScanner {
-        private InputStream stream;
-        private byte[] buf = new byte[1024 * 1024];
-        private int head, tail;
-
-        public FastScanner(InputStream stream) {
-            this.stream = stream;
+    static class FastReader {
+        BufferedReader br;
+        StringTokenizer st;
+        public FastReader(InputStream is) { br = new BufferedReader(new InputStreamReader(is)); }
+        String next() {
+            while (st == null || !st.hasMoreElements()) {
+                String line;
+                try { line = br.readLine(); } catch (IOException e) { return null; }
+                if (line == null) return null;
+                st = new StringTokenizer(line);
+            }
+            return st.nextToken();
         }
-
-        private int read() {
-            if (head >= tail) {
-                head = 0;
-                try {
-                    tail = stream.read(buf, 0, buf.length);
-                } catch (IOException e) {
-                    return -1;
-                }
-                if (tail <= 0) return -1;
-            }
-            return buf[head++];
-        }
-
-        public int nextInt() {
-            int c = read();
-            while (c <= 32) {
-                if (c == -1) return -1;
-                c = read();
-            }
-            int res = 0;
-            boolean neg = false;
-            if (c == '-') {
-                neg = true;
-                c = read();
-            }
-            while (c > 32) {
-                res = res * 10 + c - '0';
-                c = read();
-            }
-            return neg ? -res : res;
-        }
-
-        public long nextLong() {
-            int c = read();
-            while (c <= 32) {
-                if (c == -1) return -1;
-                c = read();
-            }
-            long res = 0;
-            boolean neg = false;
-            if (c == '-') {
-                neg = true;
-                c = read();
-            }
-            while (c > 32) {
-                res = res * 10 + c - '0';
-                c = read();
-            }
-            return neg ? -res : res;
-        }
+        int nextInt() { return Integer.parseInt(next()); }
+        long nextLong() { return Long.parseLong(next()); }
     }
 }
