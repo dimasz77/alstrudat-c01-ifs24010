@@ -3,93 +3,91 @@ package del.ifs24010;
 import java.util.*;
 
 public class Program {
-    private static final long INF = 1_000_000_000_000_000_0L; 
+    private static final long INF = 1_000_000_000_000_000L; 
     private int n;
     private long[] weights;
-    private int[] parent, heavy, head, pos, tail, size, nodeAtPos;
+    private int[] parent, heavy, head, pos, tail, size, nodeAtPos, visitOrder;
     private int curPos;
-    
-    // Array-based Adjacency List (Sangat cepat & tanpa warning)
-    private int[] headEdge, nextEdge, toEdge;
+    private int[] hEdge, nEdge, tEdge;
 
+    // Segment Tree Arrays
     private long[] tSum, tPref, tSuff, tAns;
     private MaxHeap[] lightF, lightG;
 
     public void initializeLibrary(int n, long[] w, int[] p) {
-        this.n = n;
-        this.weights = w;
-        this.headEdge = new int[n + 1];
-        this.nextEdge = new int[n + 1];
-        this.toEdge = new int[n + 1];
-        Arrays.fill(headEdge, -1);
-        
+        this.n = n; this.weights = w; this.curPos = 0;
+        this.hEdge = new int[n + 1]; this.nEdge = new int[n + 1]; this.tEdge = new int[n + 1];
+        Arrays.fill(hEdge, -1);
         this.parent = new int[n + 1];
         for (int i = 2; i <= n; i++) {
             this.parent[i] = p[i];
-            toEdge[i] = i;
-            nextEdge[i] = headEdge[p[i]];
-            headEdge[p[i]] = i;
+            tEdge[i] = i; nEdge[i] = hEdge[p[i]]; hEdge[p[i]] = i;
         }
 
-        heavy = new int[n + 1]; head = new int[n + 1];
-        pos = new int[n + 1]; tail = new int[n + 1];
-        size = new int[n + 1]; nodeAtPos = new int[n + 1];
+        heavy = new int[n + 1]; head = new int[n + 1]; pos = new int[n + 1];
+        tail = new int[n + 1]; size = new int[n + 1]; nodeAtPos = new int[n + 1];
         lightF = new MaxHeap[n + 1]; lightG = new MaxHeap[n + 1];
-        for (int i = 1; i <= n; i++) {
-            lightF[i] = new MaxHeap();
-            lightG[i] = new MaxHeap();
-        }
+        for (int i = 1; i <= n; i++) { lightF[i] = new MaxHeap(); lightG[i] = new MaxHeap(); }
 
-        // 1. Iterative DFS untuk menghitung size & heavy child (Aman dari StackOverflow)
-        int[] visitOrder = new int[n + 1];
+        buildHLDStructure();
+        
+        tSum = new long[4 * n + 1]; tPref = new long[4 * n + 1];
+        tSuff = new long[4 * n + 1]; tAns = new long[4 * n + 1];
+        
+        // Inisialisasi DP dari bawah ke atas secara iteratif
+        for (int i = n; i >= 1; i--) {
+            int u = visitOrder[i];
+            if (u != 1) {
+                int pr = parent[u];
+                if (u != heavy[pr]) {
+                    lightF[pr].add(getDP1(u));
+                    lightG[pr].add(getDP2(u));
+                }
+            }
+        }
+        buildSegTree(1, 1, n);
+    }
+
+    private void buildHLDStructure() {
+        visitOrder = new int[n + 1];
         int[] stack = new int[n + 1];
         int top = 0, vIdx = 0;
         stack[++top] = 1;
         while (top > 0) {
-            int u = stack[top--];
-            visitOrder[++vIdx] = u;
-            for (int e = headEdge[u]; e != -1; e = nextEdge[e]) stack[++top] = toEdge[e];
+            int u = stack[top--]; visitOrder[++vIdx] = u;
+            for (int e = hEdge[u]; e != -1; e = nEdge[e]) stack[++top] = tEdge[e];
         }
         for (int i = n; i >= 1; i--) {
-            int u = visitOrder[i];
-            size[u] = 1; heavy[u] = -1;
+            int u = visitOrder[i]; size[u] = 1; heavy[u] = -1;
             int maxS = -1;
-            for (int e = headEdge[u]; e != -1; e = nextEdge[e]) {
-                int v = toEdge[e];
-                size[u] += size[v];
+            for (int e = hEdge[u]; e != -1; e = nEdge[e]) {
+                int v = tEdge[e]; size[u] += size[v];
                 if (size[v] > maxS) { maxS = size[v]; heavy[u] = v; }
             }
         }
-
-        // 2. DFS HLD (Hanya rekursif ke light children, kedalaman aman log N)
-        curPos = 0;
-        decompose(1, 1);
-
-        tSum = new long[4 * n + 1]; tPref = new long[4 * n + 1];
-        tSuff = new long[4 * n + 1]; tAns = new long[4 * n + 1];
-        build(1, 1, n);
-    }
-
-    private void decompose(int u, int h) {
-        head[u] = h; pos[u] = ++curPos; nodeAtPos[curPos] = u; tail[h] = u;
-        if (heavy[u] != -1) decompose(heavy[u], h);
-        for (int e = headEdge[u]; e != -1; e = nextEdge[e]) {
-            int v = toEdge[e];
-            if (v != heavy[u]) {
-                decompose(v, v);
-                lightF[u].add(getDP1(v));
-                lightG[u].add(getDP2(v));
+        // Decompose menggunakan stack untuk menghindari rekursi dalam
+        int[] hStack = new int[n + 1];
+        int[] headStack = new int[n + 1];
+        int hTop = 0;
+        hStack[++hTop] = 1; headStack[hTop] = 1;
+        while (hTop > 0) {
+            int u = hStack[hTop]; int h = headStack[hTop--];
+            head[u] = h; pos[u] = ++curPos; nodeAtPos[curPos] = u; tail[h] = u;
+            for (int e = hEdge[u]; e != -1; e = nEdge[e]) {
+                int v = tEdge[e];
+                if (v != heavy[u]) { hStack[++hTop] = v; headStack[hTop] = v; }
             }
+            if (heavy[u] != -1) { hStack[++hTop] = heavy[u]; headStack[hTop] = h; }
         }
     }
 
     private long getDP1(int u) { return query(1, 1, n, pos[u], pos[tail[head[u]]]).pref; }
     private long getDP2(int u) { return query(1, 1, n, pos[u], pos[tail[head[u]]]).ans; }
 
-    private void build(int node, int L, int R) {
+    private void buildSegTree(int node, int L, int R) {
         if (L == R) { updateLeaf(node, nodeAtPos[L]); return; }
         int mid = (L + R) >> 1;
-        build(node << 1, L, mid); build(node << 1 | 1, mid + 1, R);
+        buildSegTree(node << 1, L, mid); buildSegTree(node << 1 | 1, mid + 1, R);
         pull(node);
     }
 
@@ -126,11 +124,11 @@ public class Program {
         }
     }
 
-    private void updateSeg(int node, int L, int R, int p, int u) {
+    private void updateSeg(int node, int L, int R, int idx, int u) {
         if (L == R) { updateLeaf(node, u); return; }
         int mid = (L + R) >> 1;
-        if (p <= mid) updateSeg(node << 1, L, mid, p, u);
-        else updateSeg(node << 1 | 1, mid + 1, R, p, u);
+        if (idx <= mid) updateSeg(node << 1, L, mid, idx, u);
+        else updateSeg(node << 1 | 1, mid + 1, R, idx, u);
         pull(node);
     }
 
@@ -156,7 +154,7 @@ public class Program {
         PriorityQueue<Long> out = new PriorityQueue<>(Collections.reverseOrder());
         void add(long v) { in.add(v); }
         void remove(long v) { out.add(v); }
-        void normalize() { while (!out.isEmpty() && in.peek().equals(out.peek())) { in.poll(); out.poll(); } }
+        private void normalize() { while (!out.isEmpty() && in.peek().equals(out.peek())) { in.poll(); out.poll(); } }
         long getMax() { normalize(); return in.isEmpty() ? -INF : in.peek(); }
         long getSecondMax() {
             long m1 = getMax(); if (m1 == -INF) return -INF;
