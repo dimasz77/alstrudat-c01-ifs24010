@@ -1,242 +1,264 @@
 package del.ifs24010;
 
-import java.util.Arrays;
-import java.util.PriorityQueue;
+import java.util.*;
 
+/**
+ * Implementasi Hybrid: Universal Segment Tree (untuk graf garis) 
+ * dan Lazy Max-Heap Dynamic DP (untuk graf bercabang kompleks).
+ */
 public class Program {
-    private static final long NEG_INF = -10000000000000000L;
+    
+    // Variabel SegTree
+    private boolean isLine;
+    private SegNode[] tree;
+    private int[] posInSegTree;
+    private long[] wSegTree;
+    
+    // Variabel Tree DP
     private int n;
-    private long[] weights;
-    private int[] parent;
-    private int[] headEdge, nextEdge, toEdge;
-    private int edgeCount;
-    private int[] depth, size, heavy, head, pos, tail;
-    private int currentPos;
-    private MultiSet[] lightF, lightG;
-    private long[] initF, initG, trFa, trFb, trGa, trGc;
-    private long qFa, qFb, qGa, qGc;
+    private long[] w;
+    private int[] p;
+    private long[] dp1;
+    private long[] dp2;
+    private MaxHeap[] heapDp1;
+    private MaxHeap[] heapDp2;
+    
+    class SegNode {
+        long sum, pref, suff, ans;
+    }
 
-    private static class MultiSet {
-        PriorityQueue<Long> maxHeap = new PriorityQueue<>();
-        PriorityQueue<Long> removeHeap = new PriorityQueue<>();
-
-        void add(long val) { maxHeap.add(-val); }
-        void remove(long val) { removeHeap.add(-val); }
-
-        void clean() {
-            while (!maxHeap.isEmpty() && !removeHeap.isEmpty() && maxHeap.peek().equals(removeHeap.peek())) {
-                maxHeap.poll(); removeHeap.poll();
+    // Struktur Data Cepat pengganti TreeMap
+    class MaxHeap {
+        PriorityQueue<Long> in = new PriorityQueue<>(Collections.reverseOrder());
+        PriorityQueue<Long> out = new PriorityQueue<>(Collections.reverseOrder());
+        
+        public void add(long v) { in.add(v); }
+        public void remove(long v) { out.add(v); }
+        
+        public long getMax() {
+            while(!out.isEmpty() && in.peek().equals(out.peek())) {
+                in.poll(); out.poll();
             }
+            return in.isEmpty() ? Long.MIN_VALUE : in.peek();
         }
-
-        long max() {
-            clean();
-            return maxHeap.isEmpty() ? NEG_INF : -maxHeap.peek();
-        }
-
-        long[] top2WithZero() {
-            clean();
-            long[] res = {0, 0};
-            if (maxHeap.isEmpty()) return res;
-            
-            long v1 = -maxHeap.poll();
-            if (v1 > 0) res[0] = v1;
-            
-            clean();
-            if (!maxHeap.isEmpty()) {
-                long v2 = -maxHeap.peek();
-                if (v2 > 0) res[1] = v2;
-            }
-            maxHeap.add(-v1);
-            return res;
+        
+        public boolean isEmpty() {
+            getMax();
+            return in.isEmpty();
         }
     }
 
     public void initializeLibrary(int n, long[] w, int[] p) {
-        this.n = n; this.weights = w; this.parent = p;
-        headEdge = new int[n + 1]; Arrays.fill(headEdge, -1);
-        nextEdge = new int[n + 1]; toEdge = new int[n + 1];
-        edgeCount = 0;
+        this.n = n;
+        this.w = new long[n + 1];
+        System.arraycopy(w, 1, this.w, 1, n);
+        
+        this.p = new int[n + 1];
+        if (n > 1) System.arraycopy(p, 2, this.p, 2, n - 1);
+        
+        // Universal Path Detection: Cek max degree
+        int[] degree = new int[n + 1];
+        for (int i = 2; i <= n; i++) {
+            degree[this.p[i]]++;
+            degree[i]++;
+        }
+        
+        isLine = true;
+        for (int i = 1; i <= n; i++) {
+            if (degree[i] > 2) {
+                isLine = false; break;
+            }
+        }
+        
+        if (isLine) {
+            flattenToSegmentTree(degree);
+        } else {
+            buildTreeGraph(); 
+        }
+    }
+    
+    // ==========================================================
+    // BAGIAN 1: UNIVERSAL FLATTENING & SEGMENT TREE
+    // ==========================================================
+    private void flattenToSegmentTree(int[] degree) {
+        int[] head = new int[n + 1];
+        int[] next = new int[2 * n + 2];
+        int[] to = new int[2 * n + 2];
+        int edgeCnt = 0;
+        Arrays.fill(head, -1);
         
         for (int i = 2; i <= n; i++) {
-            toEdge[edgeCount] = i;
-            nextEdge[edgeCount] = headEdge[p[i]];
-            headEdge[p[i]] = edgeCount++;
+            int u = this.p[i], v = i;
+            to[edgeCnt] = v; next[edgeCnt] = head[u]; head[u] = edgeCnt++;
+            to[edgeCnt] = u; next[edgeCnt] = head[v]; head[v] = edgeCnt++;
         }
         
-        depth = new int[n + 1]; size = new int[n + 1]; heavy = new int[n + 1];
-        head = new int[n + 1]; pos = new int[n + 1]; tail = new int[n + 1];
-        int[] bfs = new int[n + 1];
-        int headBfs = 0, tailBfs = 0;
-        bfs[tailBfs++] = 1;
-        
-        while (headBfs < tailBfs) {
-            int u = bfs[headBfs++];
-            for (int e = headEdge[u]; e != -1; e = nextEdge[e]) {
-                int v = toEdge[e];
-                depth[v] = depth[u] + 1;
-                bfs[tailBfs++] = v;
-            }
+        int start = 1;
+        for (int i = 1; i <= n; i++) {
+            if (degree[i] <= 1) { start = i; break; } // Handle N=1 atau Endpoint
         }
         
-        Arrays.fill(size, 1);
-        for (int i = n - 1; i >= 0; i--) {
-            int u = bfs[i];
-            int maxSub = 0;
-            for (int e = headEdge[u]; e != -1; e = nextEdge[e]) {
-                int v = toEdge[e];
-                size[u] += size[v];
-                if (size[v] > maxSub) { maxSub = size[v]; heavy[u] = v; }
-            }
-        }
-        
-        int[] hldHead = new int[n + 1]; Arrays.fill(hldHead, -1);
-        int[] hldNext = new int[n + 1], hldTo = new int[n + 1];
-        int hldEdgeCount = 0;
+        posInSegTree = new int[n + 1];
+        wSegTree = new long[n + 1];
+        int curr = start, prev = 0;
         
         for (int i = 1; i <= n; i++) {
-            for (int e = headEdge[i]; e != -1; e = nextEdge[e]) {
-                int v = toEdge[e];
-                if (v != heavy[i]) {
-                    hldTo[hldEdgeCount] = v; hldNext[hldEdgeCount] = hldHead[i]; hldHead[i] = hldEdgeCount++;
+            posInSegTree[curr] = i;
+            wSegTree[i] = w[curr];
+            for (int e = head[curr]; e != -1; e = next[e]) {
+                if (to[e] != prev) {
+                    prev = curr;
+                    curr = to[e];
+                    break;
                 }
             }
-            if (heavy[i] != 0) {
-                hldTo[hldEdgeCount] = heavy[i]; hldNext[hldEdgeCount] = hldHead[i]; hldHead[i] = hldEdgeCount++;
-            }
         }
         
-        int[] stack = new int[n + 1], edgePtr = new int[n + 1];
-        System.arraycopy(hldHead, 0, edgePtr, 0, n + 1);
-        int top = 0;
-        stack[++top] = 1; head[1] = 1;
-        
-        while (top > 0) {
-            int u = stack[top];
-            if (pos[u] == 0) {
-                pos[u] = ++currentPos;
-                tail[head[u]] = u;
-            }
-            int e = edgePtr[u];
-            if (e != -1) {
-                edgePtr[u] = hldNext[e];
-                int v = hldTo[e];
-                head[v] = (v == heavy[u]) ? head[u] : v;
-                stack[++top] = v;
-            } else {
-                top--;
-            }
-        }
-        
-        trFa = new long[4 * n + 1]; trFb = new long[4 * n + 1];
-        trGa = new long[4 * n + 1]; trGc = new long[4 * n + 1];
-        build(1, 1, n);
-        
-        initF = new long[n + 1]; initG = new long[n + 1];
-        lightF = new MultiSet[n + 1]; lightG = new MultiSet[n + 1];
-        for (int i = 1; i <= n; i++) {
-            lightF[i] = new MultiSet(); lightG[i] = new MultiSet();
-        }
-        
-        for (int i = n - 1; i >= 0; i--) {
-            int u = bfs[i];
-            for (int e = headEdge[u]; e != -1; e = nextEdge[e]) {
-                int v = toEdge[e];
-                if (v != heavy[u]) {
-                    lightF[u].add(initF[v]); lightG[u].add(initG[v]);
-                }
-            }
-            updateBaseNode(u);
-            if (u == head[u]) {
-                qFa = NEG_INF; qFb = 0; qGa = NEG_INF; qGc = NEG_INF;
-                query(1, 1, n, pos[u], pos[tail[u]]);
-                initF[u] = qFa; initG[u] = qGa;
-            }
-        }
+        tree = new SegNode[4 * n + 1];
+        buildSegTree(1, 1, n);
     }
 
-    private void build(int node, int start, int end) {
-        trFa[node] = NEG_INF; trFb[node] = 0; trGa[node] = NEG_INF; trGc[node] = NEG_INF;
-        if (start == end) return;
-        int mid = (start + end) / 2;
-        build(2 * node, start, mid); build(2 * node + 1, mid + 1, end);
-    }
-
-    private void merge(int node, int left, int right) {
-        trFa[node] = Math.max(trFa[left], trFb[left] + trFa[right]);
-        trFb[node] = trFb[left] + trFb[right];
-        trGa[node] = Math.max(trGa[left], Math.max(trGa[right], trGc[left] + trFa[right]));
-        trGc[node] = Math.max(trGc[right], trGc[left] + trFb[right]);
-    }
-
-    private void updateSegTree(int node, int start, int end, int idx, long fa, long fb, long ga, long gc) {
+    private void buildSegTree(int node, int start, int end) {
         if (start == end) {
-            trFa[node] = fa; trFb[node] = fb; trGa[node] = ga; trGc[node] = gc;
+            tree[node] = new SegNode();
+            tree[node].sum = wSegTree[start];
+            tree[node].pref = wSegTree[start];
+            tree[node].suff = wSegTree[start];
+            tree[node].ans = wSegTree[start];
             return;
         }
         int mid = (start + end) / 2;
-        if (idx <= mid) updateSegTree(2 * node, start, mid, idx, fa, fb, ga, gc);
-        else updateSegTree(2 * node + 1, mid + 1, end, idx, fa, fb, ga, gc);
-        merge(node, 2 * node, 2 * node + 1);
+        buildSegTree(2 * node, start, mid);
+        buildSegTree(2 * node + 1, mid + 1, end);
+        tree[node] = new SegNode();
+        mergeSegTree(node);
     }
-
-    private void updateBaseNode(int u) {
-        long w = weights[u];
-        long[] top2 = lightF[u].top2WithZero();
-        long l1 = top2[0], l2 = top2[1], mlg = lightG[u].max();
-        long fa = w + l1, fb = w, ga = Math.max(mlg, w + l1 + l2), gc = w + l1;
-        updateSegTree(1, 1, n, pos[u], fa, fb, ga, gc);
+    
+    private void mergeSegTree(int node) {
+        SegNode left = tree[2 * node];
+        SegNode right = tree[2 * node + 1];
+        tree[node].sum = left.sum + right.sum;
+        tree[node].pref = Math.max(left.pref, left.sum + right.pref);
+        tree[node].suff = Math.max(right.suff, right.sum + left.suff);
+        tree[node].ans = Math.max(Math.max(left.ans, right.ans), left.suff + right.pref);
     }
-
-    private void query(int node, int start, int end, int l, int r) {
-        if (l <= start && end <= r) {
-            long nfa = Math.max(qFa, qFb + trFa[node]);
-            long nfb = qFb + trFb[node];
-            long nga = Math.max(qGa, Math.max(trGa[node], qGc + trFa[node]));
-            long ngc = Math.max(trGc[node], qGc + trFb[node]);
-            qFa = nfa; qFb = nfb; qGa = nga; qGc = ngc;
+    
+    private void updateSegTree(int node, int start, int end, int idx, long val) {
+        if (start == end) {
+            wSegTree[idx] = val;
+            tree[node].sum = val;
+            tree[node].pref = val;
+            tree[node].suff = val;
+            tree[node].ans = val;
             return;
         }
         int mid = (start + end) / 2;
-        if (l <= mid) query(2 * node, start, mid, l, r);
-        if (r > mid) query(2 * node + 1, mid + 1, end, l, r);
+        if (start <= idx && idx <= mid) {
+            updateSegTree(2 * node, start, mid, idx, val);
+        } else {
+            updateSegTree(2 * node + 1, mid + 1, end, idx, val);
+        }
+        mergeSegTree(node);
+    }
+
+    // ==========================================================
+    // BAGIAN 2: LAZY MAX-HEAP DYNAMIC TREE DP
+    // ==========================================================
+    private void buildTreeGraph() {
+        int[] outDegree = new int[n + 1];
+        for (int i = 2; i <= n; i++) outDegree[this.p[i]]++;
+        
+        heapDp1 = new MaxHeap[n + 1];
+        heapDp2 = new MaxHeap[n + 1];
+        for (int i = 1; i <= n; i++) {
+            if (outDegree[i] > 0) {
+                heapDp1[i] = new MaxHeap();
+                heapDp2[i] = new MaxHeap();
+            }
+        }
+        
+        int[] order = new int[n + 1];
+        int headIdx = 0, tailIdx = 0;
+        order[tailIdx++] = 1;
+        
+        int[] head = new int[n + 1];
+        int[] next = new int[n + 1];
+        int[] to = new int[n + 1];
+        Arrays.fill(head, -1);
+        for (int i = 2; i <= n; i++) {
+            to[i] = i; next[i] = head[this.p[i]]; head[this.p[i]] = i;
+        }
+        
+        while (headIdx < tailIdx) {
+            int u = order[headIdx++];
+            for (int e = head[u]; e != -1; e = next[e]) order[tailIdx++] = to[e];
+        }
+        
+        dp1 = new long[n + 1];
+        dp2 = new long[n + 1];
+        
+        for (int i = n - 1; i >= 0; i--) {
+            int u = order[i];
+            recomputeDP(u);
+            if (this.p[u] != 0) {
+                heapDp1[this.p[u]].add(Math.max(0, dp1[u]));
+                heapDp2[this.p[u]].add(dp2[u]);
+            }
+        }
+    }
+    
+    private void recomputeDP(int u) {
+        long max1 = 0, max2 = 0;
+        if (heapDp1[u] != null && !heapDp1[u].isEmpty()) {
+            max1 = heapDp1[u].getMax();
+            heapDp1[u].remove(max1);
+            max2 = heapDp1[u].getMax();
+            if (max2 == Long.MIN_VALUE) max2 = 0;
+            heapDp1[u].add(max1);
+        }
+        
+        long maxChildAns = Long.MIN_VALUE;
+        if (heapDp2[u] != null && !heapDp2[u].isEmpty()) {
+            maxChildAns = heapDp2[u].getMax();
+        }
+        
+        dp1[u] = w[u] + max1;
+        dp2[u] = w[u] + max1 + max2;
+        if (maxChildAns != Long.MIN_VALUE) {
+            dp2[u] = Math.max(dp2[u], maxChildAns);
+        }
     }
 
     public void updateFragmentValue(int x, long v) {
-        weights[x] = v;
-        int u = x;
-        while (u > 0) {
-            int h = head[u], t = tail[h], p = parent[h];
-            long oldF = 0, oldG = 0;
-            if (p > 0) {
-                qFa = NEG_INF; qFb = 0; qGa = NEG_INF; qGc = NEG_INF;
-                query(1, 1, n, pos[h], pos[t]);
-                oldF = qFa; oldG = qGa;
-            }
+        if (isLine) {
+            updateSegTree(1, 1, n, posInSegTree[x], v);
+            return;
+        }
+        
+        w[x] = v;
+        int curr = x;
+        while (curr != 0) {
+            long oldDp1 = dp1[curr];
+            long oldDp2 = dp2[curr];
             
-            updateBaseNode(u);
+            recomputeDP(curr);
             
-            if (p > 0) {
-                qFa = NEG_INF; qFb = 0; qGa = NEG_INF; qGc = NEG_INF;
-                query(1, 1, n, pos[h], pos[t]);
-                long newF = qFa, newG = qGa;
+            if (dp1[curr] == oldDp1 && dp2[curr] == oldDp2) break;
+            
+            int parent = p[curr];
+            if (parent != 0) {
+                heapDp1[parent].remove(Math.max(0, oldDp1));
+                heapDp2[parent].remove(oldDp2);
                 
-                // OPTIMASI FINAL: EARLY BREAK
-                // Kalau nilainya tidak berubah, kita BERHENTI mengecek ke atas.
-                if (oldF == newF && oldG == newG) {
-                    break;
-                }
-                
-                lightF[p].remove(oldF); lightF[p].add(newF);
-                lightG[p].remove(oldG); lightG[p].add(newG);
+                heapDp1[parent].add(Math.max(0, dp1[curr]));
+                heapDp2[parent].add(dp2[curr]);
             }
-            u = p;
+            curr = parent;
         }
     }
 
     public long calculateMaxHarmony() {
-        qFa = NEG_INF; qFb = 0; qGa = NEG_INF; qGc = NEG_INF;
-        query(1, 1, n, pos[1], pos[tail[1]]);
-        return qGa;
+        if (isLine) return tree[1].ans;
+        return dp2[1];
     }
 }
