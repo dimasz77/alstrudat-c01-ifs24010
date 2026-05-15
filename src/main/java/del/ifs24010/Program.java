@@ -1,4 +1,4 @@
-package del.alstrudat;
+package del.ifs24010;
 
 import java.util.*;
 
